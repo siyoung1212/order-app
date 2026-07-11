@@ -10,6 +10,7 @@ export const DATA_SOURCE = {
   products: process.env.NOTION_PRODUCTS_DATA_SOURCE_ID!,
   orderRequests: process.env.NOTION_ORDER_REQUESTS_DATA_SOURCE_ID!,
   dailyOrders: process.env.NOTION_DAILY_ORDERS_DATA_SOURCE_ID!,
+  kakaoAuth: process.env.NOTION_KAKAO_AUTH_DATA_SOURCE_ID!,
 };
 
 // ---- 타입 ----
@@ -317,4 +318,56 @@ export async function updateDailyOrderSendResult(
     rich_text: params.error ? [{ text: { content: params.error.slice(0, 1900) } }] : [],
   };
   await notion.pages.update({ page_id: pageId, properties });
+}
+
+export async function getDailyOrdersByDate(dateIso: string): Promise<DailyOrder[]> {
+  const res = await notion.dataSources.query({
+    data_source_id: DATA_SOURCE.dailyOrders,
+    filter: { property: "order_date", date: { equals: dateIso } } as any,
+    page_size: 100,
+  });
+  return res.results.map(parseDailyOrderPage);
+}
+
+export async function markDispatchPending(pageId: string): Promise<void> {
+  await notion.pages.update({
+    page_id: pageId,
+    properties: {
+      send_status: { select: { name: "발송대기(인증예정)" } },
+      send_error: { rich_text: [] },
+    } as any,
+  });
+}
+
+export type KakaoAuth = { pageId: string; refreshToken: string };
+
+export async function getKakaoAuth(): Promise<KakaoAuth | null> {
+  const res = await notion.dataSources.query({ data_source_id: DATA_SOURCE.kakaoAuth, page_size: 1 });
+  const page: any = res.results[0];
+  if (!page) return null;
+  const refreshToken = getRichText(page.properties, "refresh_token");
+  if (!refreshToken) return null;
+  return { pageId: page.id, refreshToken };
+}
+
+export async function saveKakaoAuth(params: { refreshToken: string }): Promise<void> {
+  const existing = await getKakaoAuth();
+  if (existing) {
+    await notion.pages.update({
+      page_id: existing.pageId,
+      properties: {
+        refresh_token: { rich_text: [{ text: { content: params.refreshToken } }] },
+        updated_at: { date: { start: new Date().toISOString() } },
+      } as any,
+    });
+    return;
+  }
+  await notion.pages.create({
+    parent: { data_source_id: DATA_SOURCE.kakaoAuth } as any,
+    properties: {
+      name: { title: [{ text: { content: "john" } }] },
+      refresh_token: { rich_text: [{ text: { content: params.refreshToken } }] },
+      updated_at: { date: { start: new Date().toISOString() } },
+    } as any,
+  });
 }
