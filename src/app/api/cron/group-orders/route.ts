@@ -92,6 +92,7 @@ async function generatePdf(params: {
         body: JSON.stringify({
                 template_id: templateId,
                 export_type: "json",
+            expiration: 10080,
                 data: {
                           items: params.items,
                           company_name: "발주 자동화 시스템",
