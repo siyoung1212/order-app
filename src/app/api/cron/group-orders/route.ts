@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-    getPendingOrderRequests,
-    getHistoricalOrderRequestsForProduct,
-    getProductsByStore,
-    getVendors,
-    createDailyOrder,
-    updateOrderRequestStatus,
-    type OrderRequestRecord,
-    type Product,
-    type Vendor,
+  getPendingOrderRequests,
+  getHistoricalOrderRequestsForProduct,
+  getProductsByStore,
+  getVendors,
+  createDailyOrder,
+  updateOrderRequestStatus,
+  type OrderRequestRecord,
+  type Product,
+  type Vendor,
 } from "@/lib/notion";
+import { notifyJohn } from "@/lib/notify";
 
 // ── 이 라우트는 매일 23:00 Make.com 스케줄러가 호출합니다. ──
 // 흐름: 대기중인 오늘자 발주요청 조회 → 상품→거래처 관계로 그룹핑
@@ -121,6 +122,25 @@ async function generatePdf(params: {
     return json.file as string;
 }
 
+
+// 오늘 생성된 발주서 목록을 John에게 이메일로 알립니다 (승인 대기 안내).
+async function sendConfirmNotification(dateLabel: string, results: any[]): Promise<void> {
+  const baseUrl = process.env.APP_BASE_URL ?? "";
+  const lines = results.map((r) => {
+    const approveUrl = baseUrl ? `${baseUrl}/orders/${r.dailyOrderId}` : `(APP_BASE_URL 미설정) id=${r.dailyOrderId}`;
+    const anomalyNote = r.anomalies?.length > 0 ? " ⚠이상치 포함" : "";
+    return `- ${r.vendorName}${anomalyNote}\n  승인/반려: ${approveUrl}\n  PDF: ${r.pdfUrl}`;
+  });
+
+  const text = [
+    `${dateLabel} 발주서 ${results.length}건이 생성되었습니다. 아래 링크에서 승인/반려해주세요.`,
+    "",
+    ...lines,
+  ].join("\n\n");
+
+  await notifyJohn(`[발주 확인 필요] ${dateLabel} 발주서 ${results.length}건`, text);
+}
+
 export async function POST(req: NextRequest) {
     const auth = req.headers.get("authorization");
     const expected = `Bearer ${process.env.CRON_SECRET}`;
@@ -189,11 +209,14 @@ export async function POST(req: NextRequest) {
                         hasAnomaly: anomalies.length > 0,
               });
 
+          const summary = items.map((it) => `${it.description} x${it.qty}`).join(", ");
           const dailyOrderId = await createDailyOrder({
                     idLabel: `DO-${dateLabel}-${vendorName}`,
                     vendorId,
                     orderDateIso: dateLabel,
                     pdfUrl,
+                    summary,
+                    hasAnomaly: anomalies.length > 0,
           });
 
           for (const req of entry.requests) {
@@ -209,6 +232,12 @@ export async function POST(req: NextRequest) {
                     pdfUrl,
                     dailyOrderId,
           });
+      }
+
+      if (results.length > 0) {
+              await sendConfirmNotification(dateLabel, results).catch((err) => {
+                  console.error("confirm notification error", err);
+              });
       }
 
       return NextResponse.json({
