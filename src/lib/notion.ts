@@ -220,21 +220,101 @@ export async function updateOrderRequestStatus(
 
 // ---- DAILY_ORDERS 생성 ----
 export async function createDailyOrder(params: {
-    idLabel: string;
-    vendorId: string;
-    orderDateIso: string; // YYYY-MM-DD
-                                         pdfUrl: string;
+  idLabel: string;
+  vendorId: string;
+  orderDateIso: string; // YYYY-MM-DD
+  pdfUrl: string;
+  summary?: string;
+  hasAnomaly?: boolean;
 }): Promise<string> {
-    const page = await notion.pages.create({
-          parent: { data_source_id: DATA_SOURCE.dailyOrders } as any,
-          properties: {
-                  id: { title: [{ text: { content: params.idLabel } }] },
-                  vendor: { relation: [{ id: params.vendorId }] },
-                  order_date: { date: { start: params.orderDateIso } },
-                  pdf_url: { rich_text: [{ text: { content: params.pdfUrl } }] },
-                  approval_status: { select: { name: "대기" } },
-                  send_status: { select: { name: "대기" } },
-          } as any,
-    });
-    return page.id;
+  const page = await notion.pages.create({
+    parent: { data_source_id: DATA_SOURCE.dailyOrders } as any,
+    properties: {
+      id: { title: [{ text: { content: params.idLabel } }] },
+      vendor: { relation: [{ id: params.vendorId }] },
+      order_date: { date: { start: params.orderDateIso } },
+      pdf_url: { rich_text: [{ text: { content: params.pdfUrl } }] },
+      approval_status: { select: { name: "대기" } },
+      send_status: { select: { name: "대기" } },
+      summary: { rich_text: params.summary ? [{ text: { content: params.summary.slice(0, 1900) } }] : [] },
+      has_anomaly: { checkbox: !!params.hasAnomaly },
+    } as any,
+  });
+  return page.id;
+}
+
+// ---- DAILY_ORDERS 조회/업데이트 (컨펌+발송용) ----
+export type DailyOrder = {
+  id: string; // 노션 페이지 ID
+  idLabel: string;
+  vendorId: string | null;
+  orderDate: string;
+  pdfUrl: string;
+  approvalStatus: string;
+  sendStatus: string;
+  summary: string;
+  hasAnomaly: boolean;
+  sentAt: string;
+  sendError: string;
+};
+
+function parseDailyOrderPage(page: any): DailyOrder {
+  return {
+    id: page.id,
+    idLabel: getTitle(page.properties, "id"),
+    vendorId: getRelationFirstId(page.properties, "vendor"),
+    orderDate: page.properties?.order_date?.date?.start ?? "",
+    pdfUrl: getRichText(page.properties, "pdf_url"),
+    approvalStatus: getSelect(page.properties, "approval_status"),
+    sendStatus: getSelect(page.properties, "send_status"),
+    summary: getRichText(page.properties, "summary"),
+    hasAnomaly: page.properties?.has_anomaly?.checkbox ?? false,
+    sentAt: page.properties?.sent_at?.date?.start ?? "",
+    sendError: getRichText(page.properties, "send_error"),
+  };
+}
+
+export async function getDailyOrderById(pageId: string): Promise<DailyOrder | null> {
+  const page: any = await notion.pages.retrieve({ page_id: pageId });
+  if (!page || page.archived) return null;
+  return parseDailyOrderPage(page);
+}
+
+export async function getVendorById(vendorId: string): Promise<Vendor | null> {
+  const page: any = await notion.pages.retrieve({ page_id: vendorId });
+  if (!page || page.archived) return null;
+  return {
+    id: page.id,
+    name: getTitle(page.properties, "name"),
+    channel: getSelect(page.properties, "channel"),
+    contact: getRichText(page.properties, "contact"),
+  };
+}
+
+export async function updateDailyOrderApproval(
+  pageId: string,
+  status: "승인" | "반려"
+): Promise<void> {
+  await notion.pages.update({
+    page_id: pageId,
+    properties: {
+      approval_status: { select: { name: status } },
+    } as any,
+  });
+}
+
+export async function updateDailyOrderSendResult(
+  pageId: string,
+  params: { status: "발송완료" | "대기"; sentAtIso?: string; error?: string }
+): Promise<void> {
+  const properties: any = {
+    send_status: { select: { name: params.status } },
+  };
+  if (params.sentAtIso) {
+    properties.sent_at = { date: { start: params.sentAtIso } };
+  }
+  properties.send_error = {
+    rich_text: params.error ? [{ text: { content: params.error.slice(0, 1900) } }] : [],
+  };
+  await notion.pages.update({ page_id: pageId, properties });
 }
