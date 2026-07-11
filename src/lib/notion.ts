@@ -304,6 +304,18 @@ export async function updateDailyOrderApproval(
   });
 }
 
+// 승인을 취소하고 "대기" 상태로 되돌립니다. 발송대기(스텁) 표시도 함께 초기화합니다.
+export async function cancelDailyOrderApproval(pageId: string): Promise<void> {
+  await notion.pages.update({
+    page_id: pageId,
+    properties: {
+      approval_status: { select: { name: "대기" } },
+      send_status: { select: { name: "대기" } },
+      send_error: { rich_text: [] },
+    } as any,
+  });
+}
+
 export async function updateDailyOrderSendResult(
   pageId: string,
   params: { status: "발송완료" | "대기"; sentAtIso?: string; error?: string }
