@@ -12,6 +12,8 @@ export async function POST(
     await updateDailyOrderApproval(id, "반려");
   }
 
-  const url = new URL(`/orders/${id}`, req.url);
+  const back = req.nextUrl.searchParams.get("back");
+  const redirectPath = back && back.startsWith("/") ? back : `/orders/${id}`;
+  const url = new URL(redirectPath, req.url);
   return NextResponse.redirect(url, { status: 303 });
 }
