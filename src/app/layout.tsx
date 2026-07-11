@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import IdleLogoutGuard from "@/components/IdleLogoutGuard";
 
 export const metadata: Metadata = {
   title: "발주 시스템",
@@ -19,7 +20,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="h-full antialiased">
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        {children}
+        <IdleLogoutGuard />
+      </body>
     </html>
   );
 }
