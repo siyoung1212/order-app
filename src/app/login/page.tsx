@@ -1,11 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type EmployeeOption = { id: string; name: string; store: string };
 
-export default function LoginPage() {
+function IdleLogoutNotice() {
+  const searchParams = useSearchParams();
+  const reason = searchParams.get("reason");
+
+  if (reason !== "idle") return null;
+
+  return (
+    <p className="mb-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm text-center px-3 py-2">
+      5분간 활동이 없어 자동 로그아웃되었습니다. 다시 로그인해주세요.
+    </p>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -60,6 +73,10 @@ export default function LoginPage() {
           직원을 선택하고 PIN을 입력하세요
         </p>
 
+        <Suspense fallback={null}>
+          <IdleLogoutNotice />
+        </Suspense>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -108,5 +125,13 @@ export default function LoginPage() {
         </form>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
   );
 }
