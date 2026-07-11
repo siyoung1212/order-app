@@ -11,6 +11,7 @@ import {
   type Vendor,
 } from "@/lib/notion";
 import { notifyJohn } from "@/lib/notify";
+import { sendKakaoTextToJohn } from "@/lib/kakao";
 
 // ── 이 라우트는 매일 23:00 Make.com 스케줄러가 호출합니다. ──
 // 흐름: 대기중인 오늘자 발주요청 조회 → 상품→거래처 관계로 그룹핑
@@ -123,22 +124,33 @@ async function generatePdf(params: {
 }
 
 
-// 오늘 생성된 발주서 목록을 John에게 이메일로 알립니다 (승인 대기 안내).
 async function sendConfirmNotification(dateLabel: string, results: any[]): Promise<void> {
   const baseUrl = process.env.APP_BASE_URL ?? "";
-  const lines = results.map((r) => {
-    const approveUrl = baseUrl ? `${baseUrl}/orders/${r.dailyOrderId}` : `(APP_BASE_URL 미설정) id=${r.dailyOrderId}`;
-    const anomalyNote = r.anomalies?.length > 0 ? " ⚠이상치 포함" : "";
-    return `- ${r.vendorName}${anomalyNote}\n  승인/반려: ${approveUrl}\n  PDF: ${r.pdfUrl}`;
-  });
-
-  const text = [
-    `${dateLabel} 발주서 ${results.length}건이 생성되었습니다. 아래 링크에서 승인/반려해주세요.`,
-    "",
-    ...lines,
-  ].join("\n\n");
-
-  await notifyJohn(`[발주 확인 필요] ${dateLabel} 발주서 ${results.length}건`, text);
+  const confirmToken = process.env.CONFIRM_ACCESS_TOKEN ?? "";
+  const confirmUrl = baseUrl && confirmToken ? `${baseUrl}/confirm/${confirmToken}` : "";
+  const vendorNames = results.map((r) => r.vendorName).join(", ");
+  const anomalyCount = results.filter((r) => r.anomalies?.length > 0).length;
+  const anomalyNote = anomalyCount > 0 ? ` (\u26a0\uc774\uc0c1\uce58 ${anomalyCount}\uac74)` : "";
+  const kakaoText = `${dateLabel} \ubc1c\uc8fc\uc11c ${results.length}\uac74 \uc0dd\uc131\ub428${anomalyNote}\n\uac70\ub798\ucc98: ${vendorNames}`;
+  try {
+    if (!confirmUrl) throw new Error("APP_BASE_URL \ub610\ub294 CONFIRM_ACCESS_TOKEN \ud658\uacbd\ubcc0\uc218\uac00 \uc124\uc815\ub418\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4.");
+    await sendKakaoTextToJohn({ text: kakaoText, webUrl: confirmUrl, buttonTitle: "\ubc1c\uc8fc\uc11c \ud655\uc778\ud558\uae30" });
+  } catch (err: any) {
+    console.error("kakao notify error, falling back to email", err);
+    const lines = results.map((r) => {
+      const anomalyMark = r.anomalies?.length > 0 ? " \u26a0\uc774\uc0c1\uce58 \ud3ec\ud568" : "";
+      return `- ${r.vendorName}${anomalyMark}\n  PDF: ${r.pdfUrl}`;
+    });
+    const fallbackText = [
+      `[\uce74\uce74\uc624\ud1a1 \ubc1c\uc1a1 \uc2e4\ud328: ${err?.message ?? err}]`,
+      "",
+      `${dateLabel} \ubc1c\uc8fc\uc11c ${results.length}\uac74\uc774 \uc0dd\uc131\ub418\uc5c8\uc2b5\ub2c8\ub2e4.`,
+      confirmUrl ? `\uc2b9\uc778 \ud398\uc774\uc9c0: ${confirmUrl}` : "(APP_BASE_URL/CONFIRM_ACCESS_TOKEN \ubbf8\uc124\uc815)",
+      "",
+      ...lines,
+    ].filter(Boolean).join("\n\n");
+    await notifyJohn(`[\ubc1c\uc8fc \ud655\uc778 \ud544\uc694] ${dateLabel} \ubc1c\uc8fc\uc11c ${results.length}\uac74`, fallbackText).catch((e) => console.error("email fallback also failed", e));
+  }
 }
 
 export async function POST(req: NextRequest) {
