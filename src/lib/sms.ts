@@ -1,13 +1,14 @@
 import { ProxyAgent, setGlobalDispatcher } from "undici";
 
-// QuotaGuard 등 고정 아웃바운드 IP 프록시를 사용 중이면 모든 fetch 요청이 해당 프록시를 거치도록 설정합니다.
+// 고정 아웃바운드 IP가 필요한 경우(예: 알리고 발송 서버 IP 등록) SMS_PROXY_URL 환경변수에
+// http(s)://user:pass@host:port 형태의 프록시 주소를 넣으면 모든 fetch 요청이 그 프록시를 거칩니다.
 // 알리고(Aligo)는 발송 서버의 고정 IP를 사전 등록해야 하므로, Vercel 서버리스 함수의 유동 IP 대신
-// 프록시의 고정 IP를 사용하기 위함입니다. QUOTAGUARDSTATIC_URL이 설정되지 않았다면 아무 동작도 하지 않습니다.
+// 프록시의 고정 IP를 사용하기 위함입니다. SMS_PROXY_URL이 설정되지 않았다면 아무 동작도 하지 않습니다.
 let proxyConfigured = false;
 function ensureProxyConfigured(): void {
   if (proxyConfigured) return;
   proxyConfigured = true;
-  const proxyUrl = process.env.QUOTAGUARDSTATIC_URL;
+  const proxyUrl = process.env.SMS_PROXY_URL;
   if (proxyUrl) {
     setGlobalDispatcher(new ProxyAgent(proxyUrl));
   }
