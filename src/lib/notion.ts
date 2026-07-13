@@ -80,7 +80,7 @@ export async function getEmployeeById(id: string): Promise<Employee | null> {
 export async function getProductsByStore(_store: string): Promise<Product[]> {
   // 현재 PRODUCTS DB에는 매장을 구분하는 속성이 없어 전체 상품을 반환합니다.
   // 매장별로 취급 상품이 달라지면 PRODUCTS DB에 store(multi-select) 속성을
-  // 추가하고 이 함수에서 필터링하도록 확장하세요.
+  // 추가하고 이 함수에 필터링하도록 확장하세요.
   const res = await notion.dataSources.query({
     data_source_id: DATA_SOURCE.products,
     page_size: 100,
@@ -125,98 +125,97 @@ export async function createOrderRequests(
   return createdIds;
 }
 
-
-    // ---- VENDORS ----
+// ---- VENDORS ----
 export type Vendor = {
-    id: string;
-    name: string;
-    channel: string;
-    contact: string;
+  id: string;
+  name: string;
+  channel: string;
+  contact: string;
 };
 
 export async function getVendors(): Promise<Vendor[]> {
-    const res = await notion.dataSources.query({
-          data_source_id: DATA_SOURCE.vendors,
-          page_size: 100,
-    });
-    return res.results.map((page: any) => ({
-          id: page.id,
-          name: getTitle(page.properties, "name"),
-          channel: getSelect(page.properties, "channel"),
-          contact: getRichText(page.properties, "contact"),
-    }));
+  const res = await notion.dataSources.query({
+    data_source_id: DATA_SOURCE.vendors,
+    page_size: 100,
+  });
+  return res.results.map((page: any) => ({
+    id: page.id,
+    name: getTitle(page.properties, "name"),
+    channel: getSelect(page.properties, "channel"),
+    contact: getRichText(page.properties, "contact"),
+  }));
 }
 
 // ---- ORDER_REQUESTS 조회 (자동화 엔진용) ----
 export type OrderRequestRecord = {
-    id: string; // 노션 페이지 ID
-    productId: string | null;
-    employeeId: string | null;
-    qty: number;
-    status: string;
-    requestedAt: string;
+  id: string; // 노션 페이지 ID
+  productId: string | null;
+  employeeId: string | null;
+  qty: number;
+  status: string;
+  requestedAt: string;
 };
 
 function parseOrderRequestPage(page: any): OrderRequestRecord {
-    return {
-          id: page.id,
-          productId: getRelationFirstId(page.properties, "product"),
-          employeeId: getRelationFirstId(page.properties, "employee"),
-          qty: getNumber(page.properties, "qty"),
-          status: getSelect(page.properties, "status"),
-          requestedAt: page.properties?.requested_at?.created_time ?? page.created_time,
-    };
+  return {
+    id: page.id,
+    productId: getRelationFirstId(page.properties, "product"),
+    employeeId: getRelationFirstId(page.properties, "employee"),
+    qty: getNumber(page.properties, "qty"),
+    status: getSelect(page.properties, "status"),
+    requestedAt: page.properties?.requested_at?.created_time ?? page.created_time,
+  };
 }
 
 // status="대기"이며 requestedAt이 [startIso, endIso) 범위인 발주요청 조회
 export async function getPendingOrderRequests(
-    startIso: string,
-    endIso: string
-  ): Promise<OrderRequestRecord[]> {
-    const res = await notion.dataSources.query({
-          data_source_id: DATA_SOURCE.orderRequests,
-          filter: {
-                  and: [
-                    { property: "status", select: { equals: "대기" } },
-                    { property: "requested_at", created_time: { on_or_after: startIso } },
-                    { property: "requested_at", created_time: { before: endIso } },
-                          ],
-          } as any,
-          page_size: 100,
-    });
-    return res.results.map(parseOrderRequestPage);
+  startIso: string,
+  endIso: string
+): Promise<OrderRequestRecord[]> {
+  const res = await notion.dataSources.query({
+    data_source_id: DATA_SOURCE.orderRequests,
+    filter: {
+      and: [
+        { property: "status", select: { equals: "대기" } },
+        { property: "requested_at", created_time: { on_or_after: startIso } },
+        { property: "requested_at", created_time: { before: endIso } },
+      ],
+    } as any,
+    page_size: 100,
+  });
+  return res.results.map(parseOrderRequestPage);
 }
 
 // 특정 상품의 과거 발주요청(상태 무관) 조회 — 이상치 탐지용
 export async function getHistoricalOrderRequestsForProduct(
-    productId: string,
-    startIso: string,
-    endIso: string
-  ): Promise<OrderRequestRecord[]> {
-    const res = await notion.dataSources.query({
-          data_source_id: DATA_SOURCE.orderRequests,
-          filter: {
-                  and: [
-                    { property: "product", relation: { contains: productId } },
-                    { property: "requested_at", created_time: { on_or_after: startIso } },
-                    { property: "requested_at", created_time: { before: endIso } },
-                          ],
-          } as any,
-          page_size: 100,
-    });
-    return res.results.map(parseOrderRequestPage);
+  productId: string,
+  startIso: string,
+  endIso: string
+): Promise<OrderRequestRecord[]> {
+  const res = await notion.dataSources.query({
+    data_source_id: DATA_SOURCE.orderRequests,
+    filter: {
+      and: [
+        { property: "product", relation: { contains: productId } },
+        { property: "requested_at", created_time: { on_or_after: startIso } },
+        { property: "requested_at", created_time: { before: endIso } },
+      ],
+    } as any,
+    page_size: 100,
+  });
+  return res.results.map(parseOrderRequestPage);
 }
 
 export async function updateOrderRequestStatus(
-    pageId: string,
-    status: string
-  ): Promise<void> {
-    await notion.pages.update({
-          page_id: pageId,
-          properties: {
-                  status: { select: { name: status } },
-          } as any,
-    });
+  pageId: string,
+  status: string
+): Promise<void> {
+  await notion.pages.update({
+    page_id: pageId,
+    properties: {
+      status: { select: { name: status } },
+    } as any,
+  });
 }
 
 // ---- DAILY_ORDERS 생성 ----
@@ -224,7 +223,6 @@ export async function createDailyOrder(params: {
   idLabel: string;
   vendorId: string;
   orderDateIso: string; // YYYY-MM-DD
-  pdfUrl: string;
   summary?: string;
   hasAnomaly?: boolean;
 }): Promise<string> {
@@ -234,7 +232,6 @@ export async function createDailyOrder(params: {
       id: { title: [{ text: { content: params.idLabel } }] },
       vendor: { relation: [{ id: params.vendorId }] },
       order_date: { date: { start: params.orderDateIso } },
-      pdf_url: { rich_text: [{ text: { content: params.pdfUrl } }] },
       approval_status: { select: { name: "대기" } },
       send_status: { select: { name: "대기" } },
       summary: { rich_text: params.summary ? [{ text: { content: params.summary.slice(0, 1900) } }] : [] },
