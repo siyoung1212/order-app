@@ -79,15 +79,6 @@ export default async function ConfirmListPage({
 
               <p className="text-sm text-gray-600 whitespace-pre-wrap">{order.summary || "-"}</p>
 
-              <a
-                href={order.pdfUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="block text-center border rounded-lg py-2 text-sm font-medium text-blue-600 border-blue-300 hover:bg-blue-50"
-              >
-                발주서 PDF 열기
-              </a>
-
               {isPending && (
                 <div className="flex gap-3 pt-1">
                   <form action={`/api/orders/${order.id}/approve${backParam}`} method="POST" className="flex-1">
