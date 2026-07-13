@@ -31,7 +31,7 @@ export async function dispatchDailyOrder(dailyOrderId: string): Promise<void> {
     // John에게 실패 알림 (실패해도 메인 흐름은 막지 않음)
     await notifyJohn(
       `[발주 발송 실패] ${vendor.name}`,
-      `${vendor.name} 거래처로 발주서 발송에 실패했습니다.\n\n오류: ${message}\n\nNotion에서 수동으로 확인해주세요.\nPDF: ${order.pdfUrl}`
+      `${vendor.name} 거래처로 발주서 발송에 실패했습니다.\n\n오류: ${message}\n\nNotion에서 수동으로 확인해주세요.`
     ).catch(() => {
       // 알림 발송 자체가 실패해도 원래 에러를 삼키지 않도록 무시
     });
@@ -66,9 +66,8 @@ function buildMessage(order: DailyOrder, vendor: Vendor): string {
   return [
     `[발주서] ${vendor.name}`,
     `날짜: ${order.orderDate}`,
-    order.summary ? `품목: ${order.summary}` : "",
+    order.summary ? `품목:\n${order.summary}` : "",
     anomalyNote,
-    `PDF: ${order.pdfUrl}`,
   ]
     .filter(Boolean)
     .join("\n");
